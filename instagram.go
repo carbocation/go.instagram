@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"fmt"
 
 	"code.google.com/p/goauth2/oauth"
 )
@@ -29,6 +30,31 @@ type Instagram struct {
 	mu          *sync.Mutex
 }
 
+type InstagramData struct {
+	Meta struct {
+		Code int
+	}
+	Data struct {
+	}
+	Pagination struct {
+	}
+}
+
+func (ig *Instagram) TagsMediaRecent(tagName string) string {
+	url := "https://api.instagram.com/v1/tags/" + tagName + "/media/recent?client_id=" + ig.AccessToken
+
+	return ig.AppendRequestType(url)
+}
+
+//This method inspects the instagram instance and the list of the last 5000 requests (vaporware) 
+//to see if we should be wrapping the request with the app's client_id or with a user's info
+//If the 5000th request is more than 1 hour old, we can use our own client_id, otherwise 
+//we need to show the user an error or tell them to login 
+func (ig *Instagram) AppendRequestType(url string) string {
+	//TODO(james) toggle based on whether or not user has logged in
+	return fmt.Sprintf("%s?client_id=%s", url, ig.OauthConfig.ClientId) 
+}
+
 func check_error(err error) {
 	if err != nil {
 		log.Fatal(err)
@@ -37,6 +63,9 @@ func check_error(err error) {
 }
 
 func NewInstagram() (*Instagram, error) {
+	Config.Lock()
+	defer Config.Unlock()
+	
 	if !Config.Initialized() {
 		return &Instagram{}, errors.New("Please initialize this library by calling the Initialize(...) function")
 	}
@@ -55,17 +84,17 @@ func NewInstagram() (*Instagram, error) {
 	return ig, nil
 }
 
-func (i Instagram) Authenticate(scope string) string {
+func (ig Instagram) Authenticate(scope string) string {
 	//first step: Direct user to Instagram authorization URL
-	i.OauthConfig.AuthURL = AuthorizationURL
-	i.OauthConfig.TokenURL = AccessURL
-	i.OauthConfig.Scope = scope
-	return i.OauthConfig.AuthCodeURL("")
+	ig.OauthConfig.AuthURL = AuthorizationURL
+	ig.OauthConfig.TokenURL = AccessURL
+	ig.OauthConfig.Scope = scope
+	return ig.OauthConfig.AuthCodeURL("")
 }
 
-func (i Instagram) GetAccessToken(code string) {
+func (ig Instagram) GetAccessToken(code string) {
 	//Third step of oauth2.0: Do a Post
-	t := &oauth.Transport{Config: i.OauthConfig}
+	t := &oauth.Transport{Config: ig.OauthConfig}
 	t.Exchange(code)
 	log.Println(t)
 	/*check_error(err)
