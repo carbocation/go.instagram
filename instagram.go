@@ -3,10 +3,10 @@ package instagram
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"sync"
 
 	"code.google.com/p/goauth2/oauth"
@@ -57,6 +57,7 @@ type InstagramImage struct {
 type InstagramData struct {
 	Meta struct {
 		Code int
+		URL  string
 	}
 	Data []struct {
 		Attribution string
@@ -96,40 +97,67 @@ type InstagramData struct {
 	}
 }
 
-func (ig *Instagram) TagsMediaRecent(tagName string) (string, error) {
-	url := "https://api.instagram.com/v1/tags/" + tagName + "/media/recent"
+func (ig *Instagram) TagsMediaRecent(tagName []string) (*InstagramData, error) {
+	return ig.tagsMediaRecent(tagName, "")
+}
 
-	return ig.getDecode(url)
+func (ig *Instagram) tagsMediaRecent(tagName []string, maxTagID string) (*InstagramData, error) {
+	//TODO(james) parse more than just the first tag
+	u, err := url.Parse("https://api.instagram.com/v1/tags/" + tagName[0] + "/media/recent")
+	if err != nil {
+		return &InstagramData{}, err
+	}
+
+	//Construct our query string. If we've been given a maxTagID, add it
+	qs := u.Query()
+	if maxTagID != "" {
+		qs.Set("max_tag_id", maxTagID)
+	}
+
+	//return &InstagramData{}, nil
+	return ig.getDecode(u, &qs)
 }
 
 //Make the request with the appropriate authorization and decode the response
 // into json
-func (ig *Instagram) getDecode(url string) (string, error) {
-	resp, err := http.Get(ig.AppendRequestType(url))
+func (ig *Instagram) getDecode(u *url.URL, qs *url.Values) (*InstagramData, error) {
+	var data InstagramData
+	
+	location := ig.AppendRequestType(u, qs)
+	data.Meta.URL = location
+	
+	resp, err := http.Get(location)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return string(body), err
+		return &data, err
 	}
 
-	var data InstagramData
-
 	if err := json.Unmarshal(body, &data); err != nil {
-		return string(body), err
+		return &data, err
 	}
 
 	log.Printf("%+v", data)
 
-	return string(body), nil
+	return &data, nil
 }
 
 //This method inspects the instagram instance and the list of the last 5000 requests (vaporware)
 //to see if we should be wrapping the request with the app's client_id or with a user's info
 //If the 5000th request is more than 1 hour old, we can use our own client_id, otherwise
 //we need to show the user an error or tell them to login
-func (ig *Instagram) AppendRequestType(url string) string {
+func (ig *Instagram) AppendRequestType(u *url.URL, qs *url.Values) string {
+	//Combine the query strings
+	uQueryString := u.Query()
+	for k, v := range uQueryString {
+		for _, realVal := range v {
+			qs.Add(k, realVal)
+		}
+	}
 	//TODO(james) toggle based on whether or not user has logged in
-	return fmt.Sprintf("%s?client_id=%s", url, ig.OauthConfig.ClientId)
+	qs.Set("client_id", ig.OauthConfig.ClientId)
+
+	return u.Scheme + `://` + u.Host + u.Path + `?` + qs.Encode()
 }
 
 func check_error(err error) {
