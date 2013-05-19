@@ -29,7 +29,7 @@ func hello(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := ig.Authenticate("")
+	url := ig.Authenticate("basic")
 	log.Println(url)
 	http.Redirect(w, r, url, http.StatusFound)
 	
