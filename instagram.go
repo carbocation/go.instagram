@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
+	"strconv"
 
 	"code.google.com/p/goauth2/oauth"
 )
@@ -91,6 +93,15 @@ type InstagramData struct {
 	UsersInPhoto []InstagramUser
 }
 
+func (igd *InstagramData) Created() time.Time {
+	intVal, err := strconv.ParseInt(igd.CreatedTime, 10, 64)
+	if err != nil {
+		intVal = int64(0)
+	}
+	
+	return time.Unix(intVal, 0)
+}
+
 type InstagramResponse struct {
 	Meta struct {
 		Code int
@@ -103,118 +114,6 @@ type InstagramResponse struct {
 		NextURL  string `json:"next_url"`
 	}
 }
-
-/*
-func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
-	//The plan:
-	//
-	//1. Fire off a goroutine for each tag
-	//2. Collect each response
-	//3. See if there are any results where all tags are there
-	//4. If so, send those over
-
-	//There will be a channel that accepts slices of InstagramData
-	var igdChan = make(chan []InstagramData)
-
-	//There will be a channel that tells us something bad has happened
-	var errChan = make(chan error)
-
-	//For each tag, start a new goroutine that queries Instagram
-	for _, tag := range tags {
-		go func(t string) {
-			res, err := ig.TagMediaRecent(t)
-			if err != nil {
-				errChan <- err
-			}
-			igdChan <- *res
-
-			return
-		}(tag)
-	}
-
-	var igd = []InstagramData{}
-
-	//We know that there are only
-	for _, _ = range tags {
-		select {
-		case result, ok := <-igdChan:
-			if !ok {
-				fmt.Println("This channel is closed")
-			} else {
-				igd = append(igd, result...)
-			}
-		case badness := <-errChan:
-			return &igd, badness
-		}
-	}
-
-	//This will store the output that has all tags
-	saved := make([]InstagramData, 0)
-	addedPhotos := map[string]bool{}
-
-NextItem:
-	//For each photo returned, check all original tags
-	for _, photo := range igd {
-		//Check all tags that were in our query
-		for _, tag := range tags {
-			//Until proven otherwise, we don't think this tag was in the photo
-			hasThisTag := false
-
-			//Was that tag found in the photo?
-			for _, appliedTag := range photo.Tags {
-				if appliedTag == tag {
-					//Yes! Now we assume it had every tag unless proven otherwise
-					hasThisTag = true
-					break
-				}
-				//On the last tag, we only get here if the last tag was not among the v.Tags
-				hasThisTag = false
-			}
-
-			if !hasThisTag {
-				continue NextItem
-			}
-		}
-
-		//Congrats, nothing kicked you out. This post survives.
-		if !addedPhotos[photo.ID] {
-			//Unless you've already seen this exact photo
-			saved = append(saved, photo)
-			addedPhotos[photo.ID] = true
-		}
-	}
-
-	return &saved, nil
-}
-
-func (ig *Instagram) TagMediaRecent(tag string) (*[]InstagramData, error) {
-	igr, err := ig.tagMediaRecent(tag, "")
-	if err != nil {
-		return &igr.Data, err
-	}
-
-	if igr.Meta.Code != http.StatusOK {
-		return &igr.Data, errors.New(fmt.Sprintf("Instagram returned a %d error", igr.Meta.Code))
-	}
-
-	return &igr.Data, err
-}
-
-func (ig *Instagram) tagMediaRecent(tagName, maxTagID string) (*InstagramResponse, error) {
-	u, err := url.Parse("https://api.instagram.com/v1/tags/" + tagName + "/media/recent")
-	if err != nil {
-		return &InstagramResponse{}, err
-	}
-
-	//Construct our query string. If we've been given a maxTagID, add it
-	qs := u.Query()
-	if maxTagID != "" {
-		qs.Set("max_tag_id", maxTagID)
-	}
-
-	return ig.getDecode(u, &qs)
-}
-*/
 
 func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 	simultaneous := len(tags)
@@ -276,15 +175,38 @@ func (ig *Instagram) producer(results chan *InstagramResponse, work string) {
 func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []InstagramData, simultaneous int, keepCriterion func(InstagramData)bool ) {
 	var igData []InstagramData
 	
+	
+	
+	timeout := make(chan bool)
+	go func() {
+		//TODO: Make timeout a config'able setting
+		time.Sleep(10 * time.Second)
+		timeout <- true
+	}()
+	
+	
+	
 	i := 0
 	//Pull down results forever until we've hit some satisfaction criterion
 	for {
 		i++
 		select {
+		
+		
+		case <-timeout:
+			fmt.Printf("We timed out after %d attempts. Unlocking.\n", (i-1))
+			
+			//Drain the channel
+			go drain(results, simultaneous+1) //+1 for timeout case
+			done <- igData //Semaphore{}
+			fmt.Printf("Unlocked\n")
+			return
+		
 		case res, ok := <-results:
 			if !ok {
 				fmt.Printf("I is %d but the channel is closed.", i)
 				done <- igData //Semaphore{}
+				fmt.Printf("Unlocked\n")
 				return
 			}
 			fmt.Printf("%s is overall #%d\n", res, i)
@@ -300,11 +222,18 @@ func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []Insta
 				//If it's not happy after this result, the consumer
 				// instructs a producer to start on something new
 				//job := URL(random(300))
-				fmt.Printf("Consumer is not satisfied after job #%d. Fetching %d\n", i, res.Pagination.NextURL)
+				fmt.Printf("Consumer is not satisfied after job #%d. Fetching next: %d\n", i, res.Pagination.NextURL)
 				if res.Pagination.NextURL == "" {
 					fmt.Printf("Consumer is not satisfied after job #%d but no next page was provided.", i)
 					//1 fewer goroutine is running at the same time
 					simultaneous = simultaneous - 1
+					if simultaneous == 0 {
+						go drain(results, simultaneous)
+						//Nothing worked.
+						done <- igData
+						fmt.Printf("Unlocked\n")
+						return
+					}
 				} else {
 					go ig.producer(results, res.Pagination.NextURL)
 				}
@@ -312,8 +241,9 @@ func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []Insta
 				fmt.Printf("Consumer is satisfied after job #%d. Unlocking.\n", i)
 
 				//Drain the channel
-				drain(results, simultaneous)
+				go drain(results, simultaneous)
 				done <- igData //Semaphore{}
+				fmt.Printf("Unlocked\n")
 				return
 			}
 		}
@@ -332,18 +262,18 @@ func (ig *Instagram) satisfied(igData []InstagramData, i int) bool {
 func drain(results chan *InstagramResponse, simultaneous int) {
 	for i := 1; i < simultaneous; i++ {
 		select {
-		case res, ok := <-results:
+		case _, ok := <-results:
 			if !ok {
-				break
+				//Channel is closed. Quit.
+				return
 			}
-			fmt.Printf("Drained %s\n", res)
-			//default:
-			//	fmt.Println("Ostensibly no results to drain")
-			//	close(results)
+			fmt.Printf("Drained a value\n")
 		}
 	}
 	
 	fmt.Printf("Everything is drained. Closing the channel.\n")
+	//Note: Closing this gives deadlocks
+	//Not closing gives memory leaks
 	close(results)
 }
 
@@ -375,7 +305,7 @@ func (ig *Instagram) tagURL(tag string) string {
 	
 	//Set a higher count limit
 	params := u.Query()
-	params.Set("count", "25")
+	params.Set("count", "100")
 	
 	ul := ig.BuildQuery(u, &params)
 	
