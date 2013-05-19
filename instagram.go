@@ -262,11 +262,16 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 //Take whatever URL we get as 'work' and send back an InstagramResult object
 func (ig *Instagram) producer(results chan *InstagramResponse, work string) {	
 	//Todo: Error handling
-	r, _ := ig.getDecode(work)
+	r, err := ig.getDecode(work)
+	if err != nil {
+		r = &InstagramResponse{}
+	}
 	
 	results <- r
 	return
 }
+
+//TODO: make an error channel
 
 func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []InstagramData, simultaneous int, keepCriterion func(InstagramData)bool ) {
 	var igData []InstagramData
@@ -291,12 +296,18 @@ func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []Insta
 				}
 			}
 
-			if !ig.satisfied(igData) {
+			if !ig.satisfied(igData, i) {
 				//If it's not happy after this result, the consumer
 				// instructs a producer to start on something new
 				//job := URL(random(300))
 				fmt.Printf("Consumer is not satisfied after job #%d. Fetching %d\n", i, res.Pagination.NextURL)
-				go ig.producer(results, res.Pagination.NextURL)
+				if res.Pagination.NextURL == "" {
+					fmt.Printf("Consumer is not satisfied after job #%d but no next page was provided.", i)
+					//1 fewer goroutine is running at the same time
+					simultaneous = simultaneous - 1
+				} else {
+					go ig.producer(results, res.Pagination.NextURL)
+				}
 			} else {
 				fmt.Printf("Consumer is satisfied after job #%d. Unlocking.\n", i)
 
@@ -309,8 +320,9 @@ func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []Insta
 	}
 }
 
-func (ig *Instagram) satisfied(igData []InstagramData) bool {
-	if len(igData) > 30 {
+func (ig *Instagram) satisfied(igData []InstagramData, i int) bool {
+	//We quit after getting 30 results or after making 5 queries
+	if len(igData) > 30 || i > 5 {
 		return true
 	}
 
