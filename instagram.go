@@ -55,41 +55,43 @@ type InstagramImage struct {
 }
 
 type InstagramData struct {
+	Attribution string
+	Caption     InstagramComment
+	Comments    struct {
+		Count int64
+		Data  []InstagramComment
+	}
+	CreatedTime string `json:"created_time"` //Unixtime
+	Filter      string
+	ID          string
+	Images      struct {
+		LowResolution      InstagramImage `json:"low_resolution"`      //Note: really a URL
+		StandardResolution InstagramImage `json:"standard_resolution"` //Note: really a URL
+		Thumbnail          InstagramImage //Note: really a URL
+	}
+	Likes struct {
+		Count int64
+		Data  []InstagramUser
+	}
+	Link     string //Note: this is really a URL
+	Location struct {
+		ID        int64
+		Latitude  float64
+		Longitude float64
+		Name      string
+	}
+	Tags         []string
+	Type         string
+	User         InstagramUser
+	UsersInPhoto []InstagramUser
+}
+
+type InstagramResponse struct {
 	Meta struct {
 		Code int
-		URL  string
+		URL  string `json:"-"` //This is not part of Instagram's output
 	}
-	Data []struct {
-		Attribution string
-		Caption     InstagramComment
-		Comments    struct {
-			Count int64
-			Data  []InstagramComment
-		}
-		CreatedTime string `json:"created_time"` //Unixtime
-		Filter      string
-		ID          string
-		Images      struct {
-			LowResolution      InstagramImage `json:"low_resolution"`      //Note: really a URL
-			StandardResolution InstagramImage `json:"standard_resolution"` //Note: really a URL
-			Thumbnail          InstagramImage //Note: really a URL
-		}
-		Likes struct {
-			Count int64
-			Data  []InstagramUser
-		}
-		Link     string //Note: this is really a URL
-		Location struct {
-			ID        int64
-			Latitude  float64
-			Longitude float64
-			Name      string
-		}
-		Tags         []string
-		Type         string
-		User         InstagramUser
-		UsersInPhoto []InstagramUser
-	}
+	Data       []InstagramData
 	Pagination struct {
 		MaxTagID string `json:"max_tag_id"`
 		MinTagID string `json:"min_tag_id"`
@@ -97,15 +99,15 @@ type InstagramData struct {
 	}
 }
 
-func (ig *Instagram) TagsMediaRecent(tagName []string) (*InstagramData, error) {
+func (ig *Instagram) TagsMediaRecent(tagName []string) (*InstagramResponse, error) {
 	return ig.tagsMediaRecent(tagName, "")
 }
 
-func (ig *Instagram) tagsMediaRecent(tagName []string, maxTagID string) (*InstagramData, error) {
+func (ig *Instagram) tagsMediaRecent(tagName []string, maxTagID string) (*InstagramResponse, error) {
 	//TODO(james) parse more than just the first tag
 	u, err := url.Parse("https://api.instagram.com/v1/tags/" + tagName[0] + "/media/recent")
 	if err != nil {
-		return &InstagramData{}, err
+		return &InstagramResponse{}, err
 	}
 
 	//Construct our query string. If we've been given a maxTagID, add it
@@ -114,18 +116,20 @@ func (ig *Instagram) tagsMediaRecent(tagName []string, maxTagID string) (*Instag
 		qs.Set("max_tag_id", maxTagID)
 	}
 
-	//return &InstagramData{}, nil
 	return ig.getDecode(u, &qs)
 }
 
 //Make the request with the appropriate authorization and decode the response
 // into json
-func (ig *Instagram) getDecode(u *url.URL, qs *url.Values) (*InstagramData, error) {
-	var data InstagramData
-	
+func (ig *Instagram) getDecode(u *url.URL, qs *url.Values) (*InstagramResponse, error) {
+	var data InstagramResponse
+
+	//Build the location from your URL data
 	location := ig.AppendRequestType(u, qs)
+
+	//Store location in the struct so we can access our current URL if we feel like it
 	data.Meta.URL = location
-	
+
 	resp, err := http.Get(location)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
