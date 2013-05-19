@@ -1,2 +1,8 @@
 settings.go
 examples/settings.go
+/pkg
+.project
+*.linux
+*.exe
+*.osx
+.DS_Store

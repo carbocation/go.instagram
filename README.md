@@ -1,3 +1,3 @@
 go-instagram
 ============
-* API to access Instagram data using go-lang. 
+* API to access Instagram data using golang. 
