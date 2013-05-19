@@ -32,52 +32,62 @@ type Instagram struct {
 	mu          *sync.Mutex
 }
 
+type InstagramUser struct {
+	Bio            string
+	FullName       string `json:"full_name"`
+	ID             string
+	ProfilePicture string `json:"profile_picture"` //Note: this is really a URL
+	Username       string
+	Website        string
+}
+
+type InstagramComment struct {
+	CreatedTime string `json:"created_time"` //Unixtime
+	From        InstagramUser
+	ID          string
+	Text        string
+}
+
+type InstagramImage struct {
+	URL    string
+	Width  int64
+	Height int64
+}
+
 type InstagramData struct {
 	Meta struct {
 		Code int
 	}
 	Data []struct {
 		Attribution string
-		Tags        []string
-		Location    struct {
+		Caption     InstagramComment
+		Comments    struct {
+			Count int64
+			Data  []InstagramComment
+		}
+		CreatedTime string `json:"created_time"` //Unixtime
+		Filter      string
+		ID          string
+		Images      struct {
+			LowResolution      InstagramImage `json:"low_resolution"`      //Note: really a URL
+			StandardResolution InstagramImage `json:"standard_resolution"` //Note: really a URL
+			Thumbnail          InstagramImage //Note: really a URL
+		}
+		Likes struct {
+			Count int64
+			Data  []InstagramUser
+		}
+		Link     string //Note: this is really a URL
+		Location struct {
+			ID        int64
 			Latitude  float64
 			Longitude float64
+			Name      string
 		}
-		Comments struct {
-			Count int64
-			Data  []struct {
-				ID          string
-				CreatedTime string `json:"created_time"` //Unixtime
-				Text        string
-				From        struct {
-					Username       string
-					ProfilePicture string `json:"profile_picture"` //Note: this is really a URL
-					ID             string
-					FullName       string `json:"full_name"`
-				}
-			}
-		}
-		Filter      string
-		CreatedTime string `json:"created_time"` //Unixtime
-		Link        string //Note: this is really a URL
-		Likes       struct {
-			Count int64
-			Data  []struct {
-				Username       string
-				ProfilePicture string `json:"profile_picture"` //Note: this is really a URL
-				ID             string
-				FullName       string `json:"full_name"`
-			}
-		}
-		Images struct {
-			LowResolution struct {
-				URL    string
-				Width  int64
-				Height int64
-			} `json:"low_resolution"` //Note: really a URL
-			//LowResolution string `json:"low_resolution"` //Note: really a URL
-			//LowResolution string `json:"low_resolution"` //Note: really a URL
-		}
+		Tags         []string
+		Type         string
+		User         InstagramUser
+		UsersInPhoto []InstagramUser
 	}
 	Pagination struct {
 		MaxTagID string `json:"max_tag_id"`
