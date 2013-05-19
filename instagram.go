@@ -198,7 +198,6 @@ func (ig *Instagram) TagMediaRecent(tag string) (*[]InstagramData, error) {
 }
 
 func (ig *Instagram) tagMediaRecent(tagName, maxTagID string) (*InstagramResponse, error) {
-	//TODO(james) parse more than just the first tag
 	u, err := url.Parse("https://api.instagram.com/v1/tags/" + tagName + "/media/recent")
 	if err != nil {
 		return &InstagramResponse{}, err
