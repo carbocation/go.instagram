@@ -112,7 +112,7 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 
 	//There will be a channel that accepts slices of InstagramData
 	var igdChan = make(chan []InstagramData)
-	
+
 	//There will be a channel that tells us something bad has happened
 	var errChan = make(chan error)
 
@@ -131,7 +131,8 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 
 	var igd = []InstagramData{}
 
-	for i := 0; i < len(tags); i++ {
+	//We know that there are only
+	for _, _ = range tags {
 		select {
 		case result, ok := <-igdChan:
 			if !ok {
@@ -144,28 +145,43 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 		}
 	}
 
-	return &igd, nil
+	//This will store the output that has all tags
+	saved := make([]InstagramData, 0)
+	addedPhotos := map[string]bool{}
 
-
-	/*
-	
-		//Serial version
-
-		//For now, we run the query for all tags and send all of them back
-		//Below is the procedural / in-order version
-		var igd = []InstagramData{}
-
+NextItem:
+	//For each photo returned, check all original tags
+	for _, photo := range igd {
+		//Check all tags that were in our query
 		for _, tag := range tags {
-			res, err := ig.TagMediaRecent(tag)
-			if err != nil {
-				return &igd, err
+			//Until proven otherwise, we don't think this tag was in the photo
+			hasThisTag := false
+
+			//Was that tag found in the photo?
+			for _, appliedTag := range photo.Tags {
+				if appliedTag == tag {
+					//Yes! Now we assume it had every tag unless proven otherwise
+					hasThisTag = true
+					break
+				}
+				//On the last tag, we only get here if the last tag was not among the v.Tags
+				hasThisTag = false
 			}
 
-			igd = append(igd, *res...)
+			if !hasThisTag {
+				continue NextItem
+			}
 		}
 
-		return &igd, nil
-	*/
+		//Congrats, nothing kicked you out. This post survives.
+		if !addedPhotos[photo.ID] {
+			//Unless you've already seen this exact photo
+			saved = append(saved, photo)
+			addedPhotos[photo.ID] = true
+		}
+	}
+
+	return &saved, nil
 }
 
 func (ig *Instagram) TagMediaRecent(tag string) (*[]InstagramData, error) {
