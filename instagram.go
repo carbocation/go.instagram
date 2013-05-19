@@ -109,48 +109,45 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 		3. See if there are any results where all tags are there
 		4. If so, send those over
 	*/
-	/*
-	var igdChan = make([]chan InstagramData, len(tags))
+
+	//There will be a channel that accepts slices of InstagramData
+	var igdChan = make(chan []InstagramData)
+	
+	//There will be a channel that tells us something bad has happened
 	var errChan = make(chan error)
 
-	for i, tag := range tags {
-		go func(t string, i int) {
+	//For each tag, start a new goroutine that queries Instagram
+	for _, tag := range tags {
+		go func(t string) {
 			res, err := ig.TagMediaRecent(t)
 			if err != nil {
-				close(igdChan[i])
 				errChan <- err
 			}
-
-			for _, chunk := range *res {
-				igdChan[i] <- chunk
-			}
-			
-			close(igdChan[i])
+			igdChan <- *res
 
 			return
-		}(tag, i)
+		}(tag)
 	}
 
 	var igd = []InstagramData{}
 
 	for i := 0; i < len(tags); i++ {
-		for {
-			select {
-			case result, ok := <-igdChan[i]:
-				if !ok {
-					fmt.Println("This channel is closed")
-				} else {
-					igd = append(igd, result)
-				}
-			case badness := <-errChan:
-				return &igd, badness
+		select {
+		case result, ok := <-igdChan:
+			if !ok {
+				fmt.Println("This channel is closed")
+			} else {
+				igd = append(igd, result...)
 			}
+		case badness := <-errChan:
+			return &igd, badness
 		}
 	}
 
 	return &igd, nil
-	*/
 
+
+	/*
 	
 		//Serial version
 
@@ -168,7 +165,7 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 		}
 
 		return &igd, nil
-	
+	*/
 }
 
 func (ig *Instagram) TagMediaRecent(tag string) (*[]InstagramData, error) {
