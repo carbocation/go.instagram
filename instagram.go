@@ -3,6 +3,7 @@ package instagram
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -99,13 +100,93 @@ type InstagramResponse struct {
 	}
 }
 
-func (ig *Instagram) TagsMediaRecent(tagName []string) (*InstagramResponse, error) {
-	return ig.tagsMediaRecent(tagName, "")
+func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
+	/*
+		The plan:
+
+		1. Fire off a goroutine for each tag
+		2. Collect each response
+		3. See if there are any results where all tags are there
+		4. If so, send those over
+	*/
+	/*
+	var igdChan = make([]chan InstagramData, len(tags))
+	var errChan = make(chan error)
+
+	for i, tag := range tags {
+		go func(t string, i int) {
+			res, err := ig.TagMediaRecent(t)
+			if err != nil {
+				close(igdChan[i])
+				errChan <- err
+			}
+
+			for _, chunk := range *res {
+				igdChan[i] <- chunk
+			}
+			
+			close(igdChan[i])
+
+			return
+		}(tag, i)
+	}
+
+	var igd = []InstagramData{}
+
+	for i := 0; i < len(tags); i++ {
+		for {
+			select {
+			case result, ok := <-igdChan[i]:
+				if !ok {
+					fmt.Println("This channel is closed")
+				} else {
+					igd = append(igd, result)
+				}
+			case badness := <-errChan:
+				return &igd, badness
+			}
+		}
+	}
+
+	return &igd, nil
+	*/
+
+	
+		//Serial version
+
+		//For now, we run the query for all tags and send all of them back
+		//Below is the procedural / in-order version
+		var igd = []InstagramData{}
+
+		for _, tag := range tags {
+			res, err := ig.TagMediaRecent(tag)
+			if err != nil {
+				return &igd, err
+			}
+
+			igd = append(igd, *res...)
+		}
+
+		return &igd, nil
+	
 }
 
-func (ig *Instagram) tagsMediaRecent(tagName []string, maxTagID string) (*InstagramResponse, error) {
+func (ig *Instagram) TagMediaRecent(tag string) (*[]InstagramData, error) {
+	igr, err := ig.tagMediaRecent(tag, "")
+	if err != nil {
+		return &igr.Data, err
+	}
+
+	if igr.Meta.Code != http.StatusOK {
+		return &igr.Data, errors.New(fmt.Sprintf("Instagram returned a %d error", igr.Meta.Code))
+	}
+
+	return &igr.Data, err
+}
+
+func (ig *Instagram) tagMediaRecent(tagName, maxTagID string) (*InstagramResponse, error) {
 	//TODO(james) parse more than just the first tag
-	u, err := url.Parse("https://api.instagram.com/v1/tags/" + tagName[0] + "/media/recent")
+	u, err := url.Parse("https://api.instagram.com/v1/tags/" + tagName + "/media/recent")
 	if err != nil {
 		return &InstagramResponse{}, err
 	}
@@ -119,13 +200,12 @@ func (ig *Instagram) tagsMediaRecent(tagName []string, maxTagID string) (*Instag
 	return ig.getDecode(u, &qs)
 }
 
-//Make the request with the appropriate authorization and decode the response
-// into json
+//Make the request with the appropriate authorization and decode the response into json
 func (ig *Instagram) getDecode(u *url.URL, qs *url.Values) (*InstagramResponse, error) {
 	var data InstagramResponse
 
 	//Build the location from your URL data
-	location := ig.AppendRequestType(u, qs)
+	location := ig.BuildQuery(u, qs)
 
 	//Store location in the struct so we can access our current URL if we feel like it
 	data.Meta.URL = location
@@ -141,16 +221,14 @@ func (ig *Instagram) getDecode(u *url.URL, qs *url.Values) (*InstagramResponse, 
 		return &data, err
 	}
 
-	log.Printf("%+v", data)
-
 	return &data, nil
 }
 
-//This method inspects the instagram instance and the list of the last 5000 requests (vaporware)
+//BuildQuery inspects the instagram instance and the list of the last 5000 requests (vaporware)
 //to see if we should be wrapping the request with the app's client_id or with a user's info
 //If the 5000th request is more than 1 hour old, we can use our own client_id, otherwise
 //we need to show the user an error or tell them to login
-func (ig *Instagram) AppendRequestType(u *url.URL, qs *url.Values) string {
+func (ig *Instagram) BuildQuery(u *url.URL, qs *url.Values) string {
 	//Combine the query strings
 	uQueryString := u.Query()
 	for k, v := range uQueryString {
