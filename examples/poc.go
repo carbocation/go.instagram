@@ -32,7 +32,7 @@ func producer(results chan Result, work URL) {
 }
 
 func satisfied(i int) bool {
-	if i > 50 {
+	if i > 100 {
 		return true
 	}
 
@@ -84,9 +84,12 @@ func drain(results chan Result) {
 			//	close(results)
 		}
 	}
+	
+	fmt.Printf("Everything is drained. Closing the channel.\n")
+	close(results)
 }
 
-var simultaneous int = 100
+var simultaneous int = 30
 
 func main() {
 	start := time.Now()
