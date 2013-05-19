@@ -32,8 +32,7 @@ func producer(results chan Result, work URL) {
 }
 
 func satisfied(i int) bool {
-	//We're launching
-	if i > 9 {
+	if i > 50 {
 		return true
 	}
 
@@ -42,7 +41,8 @@ func satisfied(i int) bool {
 
 func consumer(results chan Result, done chan Semaphore) {
 	i := 0
-	for !satisfied(i) {
+	//Pull down results forever until we've hit some satisfaction criterion
+	for {
 		i++
 		select {
 		case res, ok := <-results:
@@ -61,14 +61,35 @@ func consumer(results chan Result, done chan Semaphore) {
 				go producer(results, job)
 			} else {
 				fmt.Printf("Consumer is satisfied after job #%d. Unlocking.\n", i)
+
+				//Drain the channel
+				drain(results)
 				done <- Semaphore{}
+				return
 			}
 		}
 	}
 }
 
+func drain(results chan Result) {
+	for i := 1; i < simultaneous; i++ {
+		select {
+		case res, ok := <-results:
+			if !ok {
+				break
+			}
+			fmt.Printf("Drained %s\n", res)
+			//default:
+			//	fmt.Println("Ostensibly no results to drain")
+			//	close(results)
+		}
+	}
+}
+
+var simultaneous int = 100
+
 func main() {
-	simultaneous := 5
+	start := time.Now()
 
 	//Buffered channel of results
 	results := make(chan Result, simultaneous)
@@ -85,9 +106,6 @@ func main() {
 	//Wait until the consumer is satisfied
 	<-blocker
 
-	//Drain the channel
-	<-results
-	close(results)
-
 	fmt.Printf("Done\n")
+	fmt.Println("Took %s", time.Since(start))
 }
