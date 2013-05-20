@@ -8,9 +8,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
-	"strconv"
 
 	"code.google.com/p/goauth2/oauth"
 )
@@ -34,8 +34,8 @@ type Instagram struct {
 	jar         *Jar
 	Code        string
 	OauthConfig *oauth.Config
-	
-	mu          *sync.Mutex
+
+	mu           *sync.Mutex
 	simultaneous int
 }
 
@@ -98,7 +98,7 @@ func (igd *InstagramData) Created() time.Time {
 	if err != nil {
 		intVal = int64(0)
 	}
-	
+
 	return time.Unix(intVal, 0)
 }
 
@@ -117,13 +117,13 @@ type InstagramResponse struct {
 
 func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 	simultaneous := len(tags)
-	
+
 	//Buffered channel of results
 	results := make(chan *InstagramResponse, simultaneous)
 	blocker := make(chan []InstagramData)
-	
+
 	//How shall the consumer decide whether each datum should be kept?
-	keepCriterion := func(igDatum InstagramData) bool{
+	keepCriterion := func(igDatum InstagramData) bool {
 		hasTags := false
 		for _, tag := range tags {
 			hasTags = false
@@ -133,75 +133,90 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 					break
 				}
 			}
-			
+
 			if !hasTags {
 				//If we get here and hasTags is still false, it means this tag wasn't matched
 				return false
 			}
 		}
-		
+
 		return true
 	}
 
 	for _, tag := range tags {
 		//Generate the URL for each tag
-		
-		go ig.producer(results, ig.tagURL(tag))
+
+		go ig.producer(results, ig.tagsMediaRecentURL(tag))
 	}
-	
+
 	go ig.consumer(results, blocker, simultaneous, keepCriterion)
 
 	//Wait until the consumer is satisfied
 	output := <-blocker
-	
+
+	//return &[]InstagramData{}, nil
+	return &output, nil
+}
+
+func (ig *Instagram) LocationSearch(lat, long string) (*[]InstagramData, error) {
+	simultaneous := 1
+
+	//Buffered channel of results
+	results := make(chan *InstagramResponse, simultaneous)
+	blocker := make(chan []InstagramData)
+
+	//How shall the consumer decide whether each datum should be kept?
+	keepCriterion := func(igDatum InstagramData) bool { return true }
+
+	go ig.producer(results, ig.locationSearchURL(lat, long))
+	go ig.consumer(results, blocker, simultaneous, keepCriterion)
+
+	//Wait until the consumer is satisfied
+	output := <-blocker
+
 	//return &[]InstagramData{}, nil
 	return &output, nil
 }
 
 //Take whatever URL we get as 'work' and send back an InstagramResult object
-func (ig *Instagram) producer(results chan *InstagramResponse, work string) {	
+func (ig *Instagram) producer(results chan *InstagramResponse, work string) {
 	//Todo: Error handling
 	r, err := ig.getDecode(work)
 	if err != nil {
 		r = &InstagramResponse{}
 	}
-	
+
 	results <- r
 	return
 }
 
 //TODO: make an error channel
 
-func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []InstagramData, simultaneous int, keepCriterion func(InstagramData)bool ) {
+func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []InstagramData, simultaneous int, keepCriterion func(InstagramData) bool) {
 	var igData []InstagramData
-	
-	
-	
+
 	timeout := make(chan bool)
 	go func() {
 		//TODO: Make timeout a config'able setting
 		time.Sleep(10 * time.Second)
 		timeout <- true
 	}()
-	
-	
-	
+
 	i := 0
 	//Pull down results forever until we've hit some satisfaction criterion
 	for {
 		i++
 		select {
-		
-		
+
 		case <-timeout:
-			fmt.Printf("We timed out after %d attempts. Unlocking.\n", (i-1))
-			
+			fmt.Printf("We timed out after %d attempts. Unlocking.\n", (i - 1))
+
 			//Drain the channel
 			go drain(results, simultaneous+1) //+1 for timeout case
-			done <- igData //Semaphore{}
+			done <- igData                    //Semaphore{}
 			fmt.Printf("Unlocked\n")
 			return
-		
+
 		case res, ok := <-results:
 			if !ok {
 				fmt.Printf("I is %d but the channel is closed.", i)
@@ -210,7 +225,7 @@ func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []Insta
 				return
 			}
 			fmt.Printf("%s is overall #%d\n", res, i)
-			
+
 			//Append
 			for _, datum := range res.Data {
 				if keepCriterion(datum) {
@@ -270,7 +285,7 @@ func drain(results chan *InstagramResponse, simultaneous int) {
 			fmt.Printf("Drained a value\n")
 		}
 	}
-	
+
 	fmt.Printf("Everything is drained. Closing the channel.\n")
 	//Note: Closing this gives deadlocks
 	//Not closing gives memory leaks
@@ -299,20 +314,37 @@ func (ig *Instagram) getDecode(location string) (*InstagramResponse, error) {
 }
 
 //Generate a URL string from a tag name
-func (ig *Instagram) tagURL(tag string) string {
+func (ig *Instagram) tagsMediaRecentURL(tag string) string {
 	//TODO -- error handling
 	u, _ := url.Parse("https://api.instagram.com/v1/tags/" + tag + "/media/recent")
-	
+
 	//Set a higher count limit
 	params := u.Query()
 	params.Set("count", "100")
-	
+
 	ul := ig.BuildQuery(u, &params)
-	
+
 	fmt.Println(ul)
-	
+
 	return ul
-} 
+}
+
+//Generate a URL string from a location name
+func (ig *Instagram) locationSearchURL(lat, long string) string {
+	//TODO -- error handling
+	u, _ := url.Parse("https://api.instagram.com/v1/locations/search")
+
+	//Set a higher count limit
+	params := u.Query()
+	params.Set("lat", lat)
+	params.Set("lng", long)
+
+	ul := ig.BuildQuery(u, &params)
+
+	fmt.Println(ul)
+
+	return ul
+}
 
 //BuildQuery inspects the instagram instance and the list of the last 5000 requests (vaporware)
 //to see if we should be wrapping the request with the app's client_id or with a user's info
