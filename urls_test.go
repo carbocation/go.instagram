@@ -12,7 +12,7 @@ func TestAppend(t *testing.T) {
 }
 
 func TestUrlTags(t *testing.T) {
-	x := UrlTags("selfie")
+	x := UrlTags("selfie").String()
 	y := IgBaseURL.append("tags/").append("selfie").String()
 
 	if x != y {
@@ -21,14 +21,14 @@ func TestUrlTags(t *testing.T) {
 }
 
 func TestUrlTagsSearch(t *testing.T) {
-	x := UrlTagsSearch("selfies")
+	x := UrlTagsSearch("selfies").String()
 	y := IgBaseURL.append("tags/search?q=selfies").String()
 
 	binaryChecker(x, y, t)
 }
 
 func TestUrlTagsMediaRecent(t *testing.T) {
-	x := UrlTagsMediaRecent("boo", "1024", "512")
+	x := UrlTagsMediaRecent("boo", "1024", "512").String()
 	y := IgBaseURL.append("tags/boo/media/recent?max_id=512&min_id=1024").String()
 
 	binaryChecker(x, y, t)

@@ -5,7 +5,7 @@ import (
 	"net/url"
 )
 
-type IgUrl string //URLs that we have constructed to be known-good instagram URLs
+type IgUrl string //URLs that we have constructed to be known-good instagram URLs with helper methods
 
 //Add a query parameter while preserving current query parameters (overwriting any dupes)
 func (igu IgUrl) AddQuery(key, value string) IgUrl {
@@ -22,19 +22,17 @@ func (igu IgUrl) AddQuery(key, value string) IgUrl {
 	return IgUrl(u.String())
 }
 
-/*
-func (igu IgUrl) AddToken() IgUrl {
+func (igu IgUrl) String() string {
+	return string(igu)
+}
+
+func (igu IgUrl) addClientId() IgUrl {
 	u, _ := url.Parse(igu.String())
 	q := u.Query()
-	q.Set("access_token", )
+	q.Set("client_id", Config.ClientID)
 	u.RawQuery = q.Encode()
 
 	return IgUrl(u.String())
-}
-*/
-
-func (igu IgUrl) String() string {
-	return string(igu)
 }
 
 func (igu IgUrl) append(addendum string) IgUrl {
@@ -45,48 +43,48 @@ func (igu IgUrl) append(addendum string) IgUrl {
 	return IgUrl(buffer.String())
 }
 
-func UrlUsers(userId string) string {
-	return IgBaseURL.append("users/").append(userId).String()
+func UrlUsers(userId string) IgUrl {
+	return IgBaseURL.append("users/").append(userId)
 }
 
-func UrlRelationshipsFollows(userId string) string {
-	return IgBaseURL.append("users/").append(userId).append("/follows").String()
+func UrlRelationshipsFollows(userId string) IgUrl {
+	return IgBaseURL.append("users/").append(userId).append("/follows")
 }
 
-func UrlRelationshipsFollowedBy(userId string) string {
-	return IgBaseURL.append("users/").append(userId).append("/followed-by").String()
+func UrlRelationshipsFollowedBy(userId string) IgUrl {
+	return IgBaseURL.append("users/").append(userId).append("/followed-by")
 }
 
-func UrlMedia(mediaId string) string {
-	return IgBaseURL.append("media/").append(mediaId).String()
+func UrlMedia(mediaId string) IgUrl {
+	return IgBaseURL.append("media/").append(mediaId)
 }
 
-func UrlMediaPopular() string {
-	return IgBaseURL.append("media/popular").String()
+func UrlMediaPopular() IgUrl {
+	return IgBaseURL.append("media/popular")
 }
 
-func UrlComments(mediaId string) string {
-	return IgBaseURL.append("media/").append(mediaId).append("/comments").String()
+func UrlComments(mediaId string) IgUrl {
+	return IgBaseURL.append("media/").append(mediaId).append("/comments")
 }
 
-func UrlLikes(mediaId string) string {
-	return IgBaseURL.append("media/").append(mediaId).append("/likes").String()
+func UrlLikes(mediaId string) IgUrl {
+	return IgBaseURL.append("media/").append(mediaId).append("/likes")
 }
 
-func UrlTags(tagName string) string {
-	return IgBaseURL.append("tags/").append(tagName).String()
+func UrlTags(tagName string) IgUrl {
+	return IgBaseURL.append("tags/").append(tagName)
 }
 
-func UrlTagsMediaRecent(tagName, minId, maxId string) string {
-	return IgBaseURL.append("tags/").append(tagName).append("/media/recent").AddQuery("min_id", minId).AddQuery("max_id", maxId).String()
+func UrlTagsMediaRecent(tagName, minId, maxId string) IgUrl {
+	return IgBaseURL.append("tags/").append(tagName).append("/media/recent").AddQuery("min_id", minId).AddQuery("max_id", maxId)
 }
 
-func UrlTagsSearch(Q string) string {
-	return IgBaseURL.append("tags/search").AddQuery("q", Q).String()
+func UrlTagsSearch(Q string) IgUrl {
+	return IgBaseURL.append("tags/search").AddQuery("q", Q)
 }
 
-func UrlLocations(locName string) string {
-	return IgBaseURL.append("locations/").append(locName).String()
+func UrlLocations(locName string) IgUrl {
+	return IgBaseURL.append("locations/").append(locName)
 }
 
 /*
@@ -94,46 +92,46 @@ Incomplete
 TODO: Complete
 */
 
-func UrlUsersSelfFeed() string {
-	return IgBaseURL.append("users/self/feed").String()
+func UrlUsersSelfFeed() IgUrl {
+	return IgBaseURL.append("users/self/feed")
 }
 
-func UrlUsersMediaRecent(userId string) string {
-	return IgBaseURL.append("users/").append(userId).append("/media/recent").String()
+func UrlUsersMediaRecent(userId string) IgUrl {
+	return IgBaseURL.append("users/").append(userId).append("/media/recent")
 }
 
-func UrlUsersSelfMediaLiked() string {
-	return IgBaseURL.append("users/self/media/liked").String()
+func UrlUsersSelfMediaLiked() IgUrl {
+	return IgBaseURL.append("users/self/media/liked")
 }
 
-func UrlUsersSearch() string {
-	return IgBaseURL.append("users/").String()
+func UrlUsersSearch() IgUrl {
+	return IgBaseURL.append("users/")
 }
 
-func UrlRelationshipsRequestedBy() string {
-	return IgBaseURL.append("users/self/requested-by").String()
+func UrlRelationshipsRequestedBy() IgUrl {
+	return IgBaseURL.append("users/self/requested-by")
 }
 
-func UrlRelationshipsRelationship(userId string) string {
-	return IgBaseURL.append("users/").append(userId).append("/relationship").String()
+func UrlRelationshipsRelationship(userId string) IgUrl {
+	return IgBaseURL.append("users/").append(userId).append("/relationship")
 }
 
-func UrlMediaSearch() string {
-	return IgBaseURL.append("media/search").String()
+func UrlMediaSearch() IgUrl {
+	return IgBaseURL.append("media/search")
 }
 
-func UrlCommentsDelete(mediaId, commentId string) string {
-	return IgBaseURL.append("media/").append(mediaId).append("/comments/").append(commentId).String()
+func UrlCommentsDelete(mediaId, commentId string) IgUrl {
+	return IgBaseURL.append("media/").append(mediaId).append("/comments/").append(commentId)
 }
 
-func UrlLocationsMediaRecent(locName string) string {
-	return IgBaseURL.append("locations/").append(locName).append("/media/recent").String()
+func UrlLocationsMediaRecent(locName string) IgUrl {
+	return IgBaseURL.append("locations/").append(locName).append("/media/recent")
 }
 
-func UrlLocationsSearch() string {
-	return IgBaseURL.append("locations/search").String()
+func UrlLocationsSearch() IgUrl {
+	return IgBaseURL.append("locations/search")
 }
 
-func UrlGeographiesMediaRecent(geoId string) string {
-	return IgBaseURL.append("geographies/").append(geoId).append("/media/recent").String()
+func UrlGeographiesMediaRecent(geoId string) IgUrl {
+	return IgBaseURL.append("geographies/").append(geoId).append("/media/recent")
 }

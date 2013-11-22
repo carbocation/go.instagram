@@ -22,8 +22,31 @@ const (
 	IgBaseURL        IgUrl  = IgUrl("https://api.instagram.com/v1/")
 )
 
-// OLD
+//Query via the public API / without any user-specific authentication, just your app's client_id
+func QueryPublic(location IgUrl) (*InstagramResponse, error) {
+	var data InstagramResponse
+	location = location.addClientId()
 
+	//Store location in the struct so we can access our current URL if we feel like it
+	data.Meta.URL = location.String()
+
+	//Actually hit the Instagram servers
+	resp, err := http.Get(location.String())
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return &data, err
+	}
+
+	//Parse the returned JSON
+	if err := json.Unmarshal(body, &data); err != nil {
+		return &data, err
+	}
+
+	return &data, nil
+}
+
+// OLD
 func (igd *InstagramData) Created() time.Time {
 	intVal, err := strconv.ParseInt(igd.CreatedTime, 10, 64)
 	if err != nil {
