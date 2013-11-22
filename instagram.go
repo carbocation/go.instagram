@@ -83,31 +83,19 @@ type InstagramData struct {
 
 type InstagramResponse struct {
 	Meta struct {
-		Code int
-		URL  string `json:"-"` //This is not part of Instagram's output
+		ErrorType    string `json:"error_type"`   //Only if errors occurred
+		ErrorMessage string `json:error_message"` //Only if errors occurred
+		Code         int
+		URL          string `json:"-"` //This is not part of Instagram's output
 	}
 	Data       []InstagramData
 	Pagination struct {
-		MaxTagID string `json:"max_tag_id"`
-		MinTagID string `json:"min_tag_id"`
-		NextURL  string `json:"next_url"`
+		MaxTagID  string `json:"max_tag_id"` //Deprecated?
+		MinTagID  string `json:"min_tag_id"` //Deprecated?
+		NextURL   string `json:"next_url"`
+		NextMaxID string `json:"next_max_id"`
 	}
 }
-
-/*
-type InstagramResponse2 struct {
-	Meta struct {
-		Code int
-		URL  string `json:"-"` //This is not part of Instagram's output
-	}
-	Data       InstagramData
-	Pagination struct {
-		MaxTagID string `json:"max_tag_id"`
-		MinTagID string `json:"min_tag_id"`
-		NextURL  string `json:"next_url"`
-	}
-}
-*/
 
 //Query via the public API / without any user-specific authentication, just your app's client_id
 func (ig *Instagram) QueryPublic(location IgUrl) (*InstagramResponse, error) {
