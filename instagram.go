@@ -77,6 +77,8 @@ type InstagramData struct {
 	Type         string
 	User         InstagramUser
 	UsersInPhoto []InstagramUser
+	MediaCount   string `json:"media_count"`
+	Name         string
 }
 
 type InstagramResponse struct {
@@ -92,9 +94,25 @@ type InstagramResponse struct {
 	}
 }
 
+/*
+type InstagramResponse2 struct {
+	Meta struct {
+		Code int
+		URL  string `json:"-"` //This is not part of Instagram's output
+	}
+	Data       InstagramData
+	Pagination struct {
+		MaxTagID string `json:"max_tag_id"`
+		MinTagID string `json:"min_tag_id"`
+		NextURL  string `json:"next_url"`
+	}
+}
+*/
+
 //Query via the public API / without any user-specific authentication, just your app's client_id
 func (ig *Instagram) QueryPublic(location IgUrl) (*InstagramResponse, error) {
 	var data InstagramResponse
+
 	//Make sure we put our client_id into the query
 	location = location.addClientId(ig.ClientId)
 
