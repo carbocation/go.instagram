@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
@@ -22,77 +21,6 @@ const (
 	AccessURL        = "https://api.instagram.com/oauth/access_token"
 )
 
-type Semaphore struct{}
-
-type Jar struct {
-	cookies []*http.Cookie
-}
-
-type Instagram struct {
-	AccessToken string
-	client      *http.Client
-	jar         *Jar
-	Code        string
-	OauthConfig *oauth.Config
-
-	mu           *sync.Mutex
-	simultaneous int
-}
-
-type InstagramUser struct {
-	Bio            string
-	FullName       string `json:"full_name"`
-	ID             string
-	ProfilePicture string `json:"profile_picture"` //Note: this is really a URL
-	Username       string
-	Website        string
-}
-
-type InstagramComment struct {
-	CreatedTime string `json:"created_time"` //Unixtime
-	From        InstagramUser
-	ID          string
-	Text        string
-}
-
-type InstagramImage struct {
-	URL    string
-	Width  int64
-	Height int64
-}
-
-type InstagramData struct {
-	Attribution string
-	Caption     InstagramComment
-	Comments    struct {
-		Count int64
-		Data  []InstagramComment
-	}
-	CreatedTime string `json:"created_time"` //Unixtime
-	Filter      string
-	ID          string
-	Images      struct {
-		LowResolution      InstagramImage `json:"low_resolution"`      //Note: really a URL
-		StandardResolution InstagramImage `json:"standard_resolution"` //Note: really a URL
-		Thumbnail          InstagramImage //Note: really a URL
-	}
-	Likes struct {
-		Count int64
-		Data  []InstagramUser
-	}
-	Link     string //Note: this is really a URL
-	Location struct {
-		ID        int64
-		Latitude  float64
-		Longitude float64
-		Name      string
-	}
-	Tags         []string
-	Type         string
-	User         InstagramUser
-	UsersInPhoto []InstagramUser
-}
-
 func (igd *InstagramData) Created() time.Time {
 	intVal, err := strconv.ParseInt(igd.CreatedTime, 10, 64)
 	if err != nil {
@@ -102,32 +30,29 @@ func (igd *InstagramData) Created() time.Time {
 	return time.Unix(intVal, 0)
 }
 
-type InstagramResponse struct {
-	Meta struct {
-		Code int
-		URL  string `json:"-"` //This is not part of Instagram's output
-	}
-	Data       []InstagramData
-	Pagination struct {
-		MaxTagID string `json:"max_tag_id"`
-		MinTagID string `json:"min_tag_id"`
-		NextURL  string `json:"next_url"`
-	}
-}
-
+//TagsMediaRecent accepts a slice of strings with the tag names (no hashtag needed) and
+// then returns at least 30 results for that tag, and nil (or an error message).
 func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 	simultaneous := len(tags)
 
 	//Buffered channel of results
-	results := make(chan *InstagramResponse, simultaneous)
-	blocker := make(chan []InstagramData)
+	results := make(chan *InstagramResponse, simultaneous) //Contains initial JSON responses from Instagram
+	blocker := make(chan []InstagramData)                  //Contains the data satisfying consumers' keepCriterion
 
-	//How shall the consumer decide whether each datum should be kept?
+	for _, tag := range tags {
+		//Generate the URL for each tag and pull down the instagram JSON response
+		go ig.producer(results, ig.tagsMediaRecentURL(tag))
+	}
+
+	//The consumer needs to know how to decide whether each datum should be kept, and
+	// this anonymous function will be applied by the consumer to make the decision.
+	// Specifically here, we reject any photo that doesn't have ALL of the requested tags.
 	keepCriterion := func(igDatum InstagramData) bool {
 		hasTags := false
 		for _, tag := range tags {
 			hasTags = false
 			for _, possessedTag := range igDatum.Tags {
+				//Criterion is that the datum must actually have one of the tags we requested.
 				if possessedTag == tag {
 					hasTags = true
 					break
@@ -143,12 +68,8 @@ func (ig *Instagram) TagsMediaRecent(tags []string) (*[]InstagramData, error) {
 		return true
 	}
 
-	for _, tag := range tags {
-		//Generate the URL for each tag
-
-		go ig.producer(results, ig.tagsMediaRecentURL(tag))
-	}
-
+	//Interpret the JSON responses from each of the tags and pull down additional results, as needed,
+	// until keepCriterion is met. Then, send the data back on chan blocker when the consumer is satisfied.
 	go ig.consumer(results, blocker, simultaneous, keepCriterion)
 
 	//Wait until the consumer is satisfied
@@ -192,6 +113,9 @@ func (ig *Instagram) producer(results chan *InstagramResponse, work string) {
 
 //TODO: make an error channel
 
+//Interpret the JSON responses from each of the tags and pull down additional results, as needed,
+// until keepCriterion is met. Then, send the data back on chan done when the consumer is satisfied.
+// Timeout at 10 seconds per query, run N simultaneously.
 func (ig *Instagram) consumer(results chan *InstagramResponse, done chan []InstagramData, simultaneous int, keepCriterion func(InstagramData) bool) {
 	var igData []InstagramData
 
