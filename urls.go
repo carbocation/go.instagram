@@ -26,13 +26,8 @@ func (igu IgUrl) String() string {
 	return string(igu)
 }
 
-func (igu IgUrl) addClientId() IgUrl {
-	u, _ := url.Parse(igu.String())
-	q := u.Query()
-	q.Set("client_id", Config.ClientID)
-	u.RawQuery = q.Encode()
-
-	return IgUrl(u.String())
+func (igu IgUrl) addClientId(clientId string) IgUrl {
+	return igu.AddQuery("client_id", clientId)
 }
 
 func (igu IgUrl) append(addendum string) IgUrl {
@@ -42,6 +37,10 @@ func (igu IgUrl) append(addendum string) IgUrl {
 
 	return IgUrl(buffer.String())
 }
+
+/*
+Fully-specified URL query functions providing all options that the Instagram API provides:
+*/
 
 func UrlUsers(userId string) IgUrl {
 	return IgBaseURL.append("users/").append(userId)
@@ -88,8 +87,9 @@ func UrlLocations(locName string) IgUrl {
 }
 
 /*
-Incomplete
-TODO: Complete
+Incomplete URL query functions
+These do NOT yet provide all options that the Instagram API provides
+TODO: Complete them
 */
 
 func UrlUsersSelfFeed() IgUrl {

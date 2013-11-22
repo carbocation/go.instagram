@@ -6,11 +6,13 @@ import (
 )
 
 func TestQueryPublic(t *testing.T) {
-	Initialize(&Cfg{ClientID: "abcdefg"})
-
 	url := UrlTags("selfie")
+	ig, err := NewInstagram("abcdefg")
+	if err != nil {
+		t.Error(err)
+	}
 
-	_, err := QueryPublic(url)
+	_, err = ig.QueryPublic(url)
 	if err != nil {
 		t.Error(err)
 	}
