@@ -19,3 +19,23 @@ func TestUrlTags(t *testing.T) {
 		t.Errorf("Asked for %s, got %s", y, x)
 	}
 }
+
+func TestUrlTagsSearch(t *testing.T) {
+	x := UrlTagsSearch("selfies")
+	y := IgBaseURL.append("tags/search?q=selfies").String()
+
+	binaryChecker(x, y, t)
+}
+
+func TestUrlTagsMediaRecent(t *testing.T) {
+	x := UrlTagsMediaRecent("boo", "1024", "512")
+	y := IgBaseURL.append("tags/boo/media/recent?max_id=512&min_id=1024").String()
+
+	binaryChecker(x, y, t)
+}
+
+func binaryChecker(x, y string, t *testing.T) {
+	if x != y {
+		t.Errorf("Asked for %s, got %s", y, x)
+	}
+}
