@@ -7,6 +7,8 @@ import (
 	"code.google.com/p/goauth2/oauth"
 )
 
+type IgUrl string //URLs that we have constructed to be known-good instagram URLs
+
 type Semaphore struct{}
 
 type Jar struct {

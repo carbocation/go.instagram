@@ -17,9 +17,12 @@ import (
 //API docs: http://instagram.com/developer
 
 const (
-	AuthorizationURL = "https://api.instagram.com/oauth/authorize"
-	AccessURL        = "https://api.instagram.com/oauth/access_token"
+	AuthorizationURL string = "https://api.instagram.com/oauth/authorize"
+	AccessURL        string = "https://api.instagram.com/oauth/access_token"
+	IgBaseURL        IgUrl  = IgUrl("https://api.instagram.com/v1/")
 )
+
+// OLD
 
 func (igd *InstagramData) Created() time.Time {
 	intVal, err := strconv.ParseInt(igd.CreatedTime, 10, 64)
