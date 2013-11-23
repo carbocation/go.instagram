@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"fmt"
 )
 
 //API docs: http://instagram.com/developer
@@ -68,17 +70,17 @@ type InstagramData struct {
 	}
 	Link     string //Note: this is really a URL
 	Location struct {
-		ID        int64
+		ID        float64 `json:",string"`
 		Latitude  float64
 		Longitude float64
 		Name      string
 	}
+	MediaCount   float64 `json:"media_count"`
+	Name         string
 	Tags         []string
 	Type         string
 	User         InstagramUser
 	UsersInPhoto []InstagramUser
-	MediaCount   string `json:"media_count"`
-	Name         string
 }
 
 type InstagramResponse struct {
@@ -88,8 +90,9 @@ type InstagramResponse struct {
 		Code         int
 		URL          string `json:"-"` //This is not part of Instagram's output
 	}
-	Data       []InstagramData
-	Pagination struct {
+	DataInterface interface{}     `json:"data"` //Because Instagram has 2 different types of "Data"
+	Data          []InstagramData `json:"-"`    //Because Instagram has 2 different types of "Data"
+	Pagination    struct {
 		MaxTagID  string `json:"max_tag_id"` //Deprecated?
 		MinTagID  string `json:"min_tag_id"` //Deprecated?
 		NextURL   string `json:"next_url"`
@@ -99,28 +102,61 @@ type InstagramResponse struct {
 
 //Query via the public API / without any user-specific authentication, just your app's client_id
 func (ig *Instagram) QueryPublic(location IgUrl) (*InstagramResponse, error) {
-	var data InstagramResponse
+	var response InstagramResponse
 
 	//Make sure we put our client_id into the query
 	location = location.addClientId(ig.ClientId)
 
 	//Store location in the struct so we can access our current URL if we feel like it
-	data.Meta.URL = location.String()
+	response.Meta.URL = location.String()
 
 	//Actually hit the Instagram servers
-	resp, err := http.Get(location.String())
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	query, err := http.Get(location.String())
+	defer query.Body.Close()
+	body, err := ioutil.ReadAll(query.Body)
 	if err != nil {
-		return &data, err
+		return &response, err
 	}
 
 	//Parse the returned JSON
-	if err := json.Unmarshal(body, &data); err != nil {
-		return &data, err
+	if err := json.Unmarshal(body, &response); err != nil {
+		return &response, err
 	}
 
-	return &data, nil
+	//fmt.Println("TypeOf response", reflect.TypeOf(response.DataInterface))
+
+	//Now for the data portion, re-encapsulate it and plan to re-parse:
+	di, err := json.Marshal(response.DataInterface)
+	if err != nil {
+		fmt.Println("Error in marshaling?", err)
+	}
+
+	di2, err := json.Marshal(response.DataInterface)
+	if err != nil {
+		fmt.Println("Error in marshaling?", err)
+	}
+
+	//fmt.Println(string(di))
+
+	darray := []InstagramData{}
+	//Try to unmarshal the data as []InstagramData first
+	if err := json.Unmarshal(di, &darray); err != nil {
+		fmt.Println("Error as array:", err)
+		fmt.Println(response.DataInterface)
+		dcontainer := InstagramData{}
+		if err := json.Unmarshal(di2, &dcontainer); err != nil {
+			fmt.Println("Error as object:", err)
+			return &response, err
+		} else {
+			//fmt.Println("response.Data IS InstagramData{}")
+			response.Data = []InstagramData{dcontainer}
+		}
+	} else {
+		//fmt.Println("response.Data IS []InstagramData{}{}")
+		response.Data = darray
+	}
+
+	return &response, nil
 }
 
 func (igd *InstagramData) Created() time.Time {
