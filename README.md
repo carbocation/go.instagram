@@ -1,5 +1,9 @@
 go-instagram
 ============
+
+NOTE: Please use https://github.com/gedex/go-instagram
+-------
+
 * API to access Instagram data using golang. 
 
 The goal of this package is to use concurrency 
