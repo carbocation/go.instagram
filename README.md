@@ -1,4 +1,4 @@
-NOTE: Please use https://github.com/gedex/go-instagram
+NOTE: Please use https://github.com/carbocation/go-instagram
 -------
 
 go-instagram
